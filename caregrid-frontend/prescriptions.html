@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Prescriptions - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Prescription Management</h2>
+
+  <div class="card">
+    <h3>Load or Start a Prescription</h3>
+    <input id="patientIdInput" placeholder="Patient ID">
+    <input id="doctorNameInput" placeholder="Doctor Name">
+    <button type="button" id="loadBtn">Load Latest Prescription</button>
+    <button type="button" id="newBtn">Start New Prescription (draft)</button>
+    <p id="loadResult"></p>
+  </div>
+
+  <div class="card" id="editCard" style="display:none;">
+    <h3 id="cardTitle">Current Prescription</h3>
+    <p id="prescriptionMeta"></p>
+    <p id="draftNotice" style="color:#c62828; font-size:13px; display:none;">
+      This is a new draft — it won't be saved until you add a medicine or save a note below.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Medicine</th><th>Dosage</th><th>Frequency</th><th>Action</th></tr>
+      </thead>
+      <tbody id="medicineTable"></tbody>
+    </table>
+
+    <h4>Add a Medicine</h4>
+    <input id="medName" placeholder="Medicine name">
+    <input id="medDosage" placeholder="Dosage (e.g. 500mg)">
+    <input id="medFrequency" placeholder="Frequency (e.g. Twice a day)">
+    <button type="button" id="addMedBtn">+ Add Medicine</button>
+
+    <h4>Notes</h4>
+    <input id="notesInput" placeholder="Notes">
+    <button type="button" id="saveNotesBtn">Save Notes</button>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    let currentPrescriptionId = null;
+    let draftPatientId = null;
+    let draftDoctorName = null;
+
+    document.getElementById("loadBtn").addEventListener("click", async () => {
+      const patientId = document.getElementById("patientIdInput").value.trim();
+      if (!patientId) return alert("Enter a Patient ID first");
+
+      try {
+        const res = await fetch(`${API_BASE}/prescriptions/patient/${patientId}`);
+        const list = await res.json();
+
+        if (!Array.isArray(list) || list.length === 0) {
+          document.getElementById("loadResult").textContent = "No prescription found — click 'Start New Prescription' instead.";
+          document.getElementById("editCard").style.display = "none";
+          return;
+        }
+
+        currentPrescriptionId = list[0]._id;
+        document.getElementById("draftNotice").style.display = "none";
+        document.getElementById("cardTitle").textContent = "Current Prescription";
+        renderPrescription(list[0]);
+        document.getElementById("loadResult").textContent = "Loaded latest prescription.";
+      } catch (err) {
+        document.getElementById("loadResult").textContent = "Error: could not reach the server.";
+      }
+    });
+
+    document.getElementById("newBtn").addEventListener("click", () => {
+      const patientId = document.getElementById("patientIdInput").value.trim();
+      const doctorName = document.getElementById("doctorNameInput").value.trim();
+      if (!patientId || !doctorName) return alert("Enter both Patient ID and Doctor Name first");
+
+      currentPrescriptionId = null;
+      draftPatientId = patientId;
+      draftDoctorName = doctorName;
+
+      document.getElementById("cardTitle").textContent = "New Prescription (draft)";
+      document.getElementById("draftNotice").style.display = "block";
+      document.getElementById("editCard").style.display = "block";
+      document.getElementById("prescriptionMeta").textContent = `Doctor: ${doctorName}`;
+      document.getElementById("notesInput").value = "";
+      document.getElementById("medicineTable").innerHTML = "";
+      document.getElementById("loadResult").textContent = "";
+    });
+
+    function renderPrescription(prescription) {
+      document.getElementById("editCard").style.display = "block";
+      document.getElementById("prescriptionMeta").textContent =
+        `Doctor: ${prescription.doctorName} ${prescription.isFinal ? "(FINAL — locked)" : ""}`;
+      document.getElementById("notesInput").value = prescription.notes || "";
+
+      const tbody = document.getElementById("medicineTable");
+      tbody.innerHTML = "";
+
+      if (!prescription.medicines || prescription.medicines.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4">No medicines added yet.</td></tr>`;
+      } else {
+        prescription.medicines.forEach((med, index) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td><input value="${med.name || ""}" onchange="updateMedicine(${index}, 'name', this.value)" ${prescription.isFinal ? "disabled" : ""}></td>
+            <td><input value="${med.dosage || ""}" onchange="updateMedicine(${index}, 'dosage', this.value)" ${prescription.isFinal ? "disabled" : ""}></td>
+            <td><input value="${med.frequency || ""}" onchange="updateMedicine(${index}, 'frequency', this.value)" ${prescription.isFinal ? "disabled" : ""}></td>
+            <td>${prescription.isFinal ? "-" : `<button onclick="removeMedicine(${index})">Remove</button>`}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+    }
+
+    document.getElementById("addMedBtn").addEventListener("click", async () => {
+      const name = document.getElementById("medName").value.trim();
+      const dosage = document.getElementById("medDosage").value.trim();
+      const frequency = document.getElementById("medFrequency").value.trim();
+      if (!name) return alert("Enter a medicine name");
+
+      try {
+        if (!currentPrescriptionId) {
+          const createRes = await fetch(`${API_BASE}/prescriptions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              patientId: draftPatientId,
+              doctorName: draftDoctorName,
+              medicines: [{ name, dosage, frequency }],
+              notes: "",
+            }),
+          });
+          const prescription = await createRes.json();
+          if (prescription.error) return alert(prescription.error);
+
+          currentPrescriptionId = prescription._id;
+          document.getElementById("draftNotice").style.display = "none";
+          document.getElementById("cardTitle").textContent = "Current Prescription";
+          renderPrescription(prescription);
+        } else {
+          const res = await fetch(`${API_BASE}/prescriptions/${currentPrescriptionId}/medicines`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, dosage, frequency }),
+          });
+          const json = await res.json();
+          if (json.error) return alert(json.error);
+          renderPrescription(json);
+        }
+
+        document.getElementById("medName").value = "";
+        document.getElementById("medDosage").value = "";
+        document.getElementById("medFrequency").value = "";
+      } catch (err) {
+        alert("Error: could not reach the server.");
+      }
+    });
+
+    async function updateMedicine(index, field, value) {
+      try {
+        const res = await fetch(`${API_BASE}/prescriptions/${currentPrescriptionId}/medicines/${index}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: value }),
+        });
+        const json = await res.json();
+        if (json.error) alert(json.error);
+      } catch (err) {
+        alert("Error: could not reach the server.");
+      }
+    }
+
+    async function removeMedicine(index) {
+      try {
+        const res = await fetch(`${API_BASE}/prescriptions/${currentPrescriptionId}/medicines/${index}`, {
+          method: "DELETE",
+        });
+        const json = await res.json();
+        if (json.error) return alert(json.error);
+        renderPrescription(json);
+      } catch (err) {
+        alert("Error: could not reach the server.");
+      }
+    }
+
+    document.getElementById("saveNotesBtn").addEventListener("click", async () => {
+      const notes = document.getElementById("notesInput").value;
+
+      try {
+        if (!currentPrescriptionId) {
+          const createRes = await fetch(`${API_BASE}/prescriptions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              patientId: draftPatientId,
+              doctorName: draftDoctorName,
+              medicines: [],
+              notes,
+            }),
+          });
+          const prescription = await createRes.json();
+          if (prescription.error) return alert(prescription.error);
+
+          currentPrescriptionId = prescription._id;
+          document.getElementById("draftNotice").style.display = "none";
+          document.getElementById("cardTitle").textContent = "Current Prescription";
+          renderPrescription(prescription);
+          alert("Prescription created and notes saved");
+          return;
+        }
+
+        const res = await fetch(`${API_BASE}/prescriptions/${currentPrescriptionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes }),
+        });
+        const json = await res.json();
+        if (json.error) return alert(json.error);
+        alert("Notes saved");
+      } catch (err) {
+        alert("Error: could not reach the server.");
+      }
+    });
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

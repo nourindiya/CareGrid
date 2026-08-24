@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Lab Report Scanning - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Lab Report Scanning</h2>
+  <div class="card">
+    <form id="labForm">
+      <input name="patientId" placeholder="Patient ID" required>
+      <input name="labImage" type="file" accept="image/*" required>
+      <button type="submit">Scan Report</button>
+    </form>
+    <p id="labResult"></p>
+  </div>
+
+  <div class="card" id="extractedCard" style="display:none;">
+    <h3>Extracted Values</h3>
+    <p id="extractedValues"></p>
+    <details>
+      <summary>View raw scanned text</summary>
+      <p id="rawText" style="white-space: pre-wrap; font-size: 12px;"></p>
+    </details>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    document.getElementById("labForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const resultBox = document.getElementById("labResult");
+      resultBox.textContent = "Scanning... this can take 10-20 seconds";
+
+      try {
+        const res = await fetch(`${API_BASE}/lab-reports`, {
+          method: "POST",
+          body: formData, // no Content-Type header — browser sets it automatically for file uploads
+        });
+        const json = await res.json();
+
+        if (json.error) {
+          resultBox.textContent = "Error: " + json.error;
+          return;
+        }
+
+        resultBox.textContent = "Scan complete!";
+        const values = json.labReport.extractedValues;
+        document.getElementById("extractedValues").textContent =
+          `Hemoglobin: ${values.hemoglobin ?? "not found"} | Blood Sugar: ${values.bloodSugar ?? "not found"} | WBC: ${values.wbc ?? "not found"}`;
+
+        if (json.labReport.isCritical) {
+          const warning = document.createElement("p");
+          warning.style.cssText = "background:#ffebee; color:#c62828; padding:10px; border-radius:6px; font-weight:bold;";
+          warning.textContent = "⚠ CRITICAL VALUES DETECTED: " +
+            json.labReport.criticalFlags.map((f) => `${f.test} = ${f.value} (safe range: ${f.safeRange})`).join(", ");
+          document.getElementById("extractedCard").appendChild(warning);
+        }
+        document.getElementById("rawText").textContent = json.labReport.extractedText;
+        document.getElementById("extractedCard").style.display = "block";
+      } catch (err) {
+        resultBox.textContent = "Error: could not reach the server.";
+      }
+    });
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

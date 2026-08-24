@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bed Planning - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Bed Planning — Expected Discharge Dates</h2>
+  <p style="color:#666; font-size:13px;">Set by doctors after reviewing each patient's condition.</p>
+
+  <table>
+    <thead>
+      <tr><th>Patient</th><th>Patient ID</th><th>Health Problem</th><th>Admitted On</th><th>Expected Discharge</th><th>Set By</th></tr>
+    </thead>
+    <tbody id="patientList"></tbody>
+  </table>
+
+  <script src="api.js"></script>
+  <script>
+    async function loadAdmittedPatients() {
+      const res = await fetch(`${API_BASE}/forecast/all-admitted`);
+      const patients = await res.json();
+      const tbody = document.getElementById("patientList");
+      tbody.innerHTML = "";
+
+      if (patients.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6">No admitted patients right now.</td></tr>`;
+        return;
+      }
+
+      patients.forEach((p) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${p.name}</td>
+          <td style="font-size:11px; color:#666;">${p._id}</td>
+          <td>${p.healthProblem || "-"}</td>
+          <td>${p.admittedAt ? new Date(p.admittedAt).toLocaleDateString() : "-"}</td>
+          <td>${p.expectedDischargeDate ? new Date(p.expectedDischargeDate).toLocaleDateString() : "<span style='color:#c62828;'>Not set yet</span>"}</td>
+          <td>${p.expectedDischargeSetBy || "-"}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    loadAdmittedPatients();
+    setInterval(loadAdmittedPatients, 5000);
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Prescriptions - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>My Prescriptions</h2>
+  <div id="prescriptionList"></div>
+
+  <script src="api.js"></script>
+  <script>
+    async function loadMyPrescriptions() {
+      const userId = localStorage.getItem("userId");
+      const container = document.getElementById("prescriptionList");
+
+      if (!userId) {
+        container.innerHTML = "<p>Could not find your account ID. Please log out and log back in.</p>";
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/prescriptions/my/${userId}`);
+        const list = await res.json();
+
+        if (!Array.isArray(list) || list.length === 0) {
+          container.innerHTML = "<p>No prescriptions yet.</p>";
+          return;
+        }
+
+        container.innerHTML = list.map((p) => `
+          <div class="card">
+            <p><b>Doctor:</b> ${p.doctorName} ${p.isFinal ? "<span class='status-badge status-approved'>FINAL</span>" : ""}</p>
+            <p><b>Date:</b> ${new Date(p.createdAt).toLocaleDateString()}</p>
+            <table>
+              <thead><tr><th>Medicine</th><th>Dosage</th><th>Frequency</th></tr></thead>
+              <tbody>
+                ${(p.medicines || []).map((m) => `<tr><td>${m.name}</td><td>${m.dosage || "-"}</td><td>${m.frequency || "-"}</td></tr>`).join("")}
+              </tbody>
+            </table>
+            <p><b>Notes:</b> ${p.notes || "-"}</p>
+          </div>
+        `).join("");
+      } catch (err) {
+        container.innerHTML = "<p>Error: could not reach the server.</p>";
+      }
+    }
+
+    loadMyPrescriptions();
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>
