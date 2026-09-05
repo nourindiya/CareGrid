@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ambulance Tracking - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+  <script src="auth-guard.js"></script>
+  <style>
+    #map { height: 400px; border-radius: 10px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Ambulance Tracking</h2>
+  <div id="map"></div>
+
+  <h3>Free Ambulances — Book One</h3>
+  <table>
+    <thead>
+      <tr><th>Vehicle</th><th>Home Hospital</th><th>Current Location</th><th>Book</th></tr>
+    </thead>
+    <tbody id="freeList"></tbody>
+  </table>
+
+  <div class="card" id="bookingCard" style="display:none;">
+    <h3>Book This Ambulance</h3>
+    <p id="bookingAmbulanceLabel"></p>
+    <form id="bookForm">
+      <input name="patientId" placeholder="Patient ID" required>
+      <input name="fromHospital" placeholder="From Hospital" required>
+      <input name="toHospital" placeholder="To Hospital" required>
+      <button type="submit">Confirm Booking</button>
+    </form>
+    <p id="bookResult"></p>
+  </div>
+
+  <h3>Dispatched Ambulances — Active Trips</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Vehicle</th><th>Patient</th><th>From</th><th>To</th>
+        <th>Dispatched At</th><th>ETA</th><th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="dispatchedList"></tbody>
+  </table>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="api.js"></script>
+  <script>
+    const map = L.map("map").setView([23.8103, 90.4125], 8);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+
+    let markers = {};
+    let selectedAmbulanceId = null;
+
+    async function loadMap() {
+      const res = await fetch(`${API_BASE}/ambulances`);
+      const ambulances = await res.json();
+
+      ambulances.forEach((amb) => {
+        const popupText = `${amb.vehicleNumber} — ${amb.status}` +
+          (amb.status === "dispatched" ? `<br>ETA: ${amb.etaMinutes} min<br>To: ${amb.toHospital}` : "");
+
+        if (markers[amb._id]) {
+          markers[amb._id].setLatLng([amb.currentLat, amb.currentLng]);
+          markers[amb._id].setPopupContent(popupText);
+        } else {
+          const marker = L.marker([amb.currentLat, amb.currentLng]).addTo(map);
+          marker.bindPopup(popupText);
+          markers[amb._id] = marker;
+        }
+      });
+    }
+
+    async function loadFreeAmbulances() {
+      const res = await fetch(`${API_BASE}/ambulances/available`);
+      const ambulances = await res.json();
+      const tbody = document.getElementById("freeList");
+      tbody.innerHTML = "";
+
+      if (ambulances.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4">No free ambulances right now.</td></tr>`;
+        return;
+      }
+
+      ambulances.forEach((amb) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${amb.vehicleNumber}</td>
+          <td>${amb.hospitalName}</td>
+          <td>${amb.currentLat.toFixed(3)}, ${amb.currentLng.toFixed(3)}</td>
+          <td><button onclick="selectAmbulance('${amb._id}', '${amb.vehicleNumber}')">Book</button></td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    async function loadDispatchedAmbulances() {
+      const res = await fetch(`${API_BASE}/ambulances/dispatched`);
+      const ambulances = await res.json();
+      const tbody = document.getElementById("dispatchedList");
+      tbody.innerHTML = "";
+
+      if (ambulances.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7">No active trips right now.</td></tr>`;
+        return;
+      }
+
+      ambulances.forEach((amb) => {
+        const dispatchedTime = new Date(amb.dispatchedAt);
+        const arrivalEstimate = new Date(dispatchedTime.getTime() + amb.etaMinutes * 60000);
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${amb.vehicleNumber}</td>
+          <td>${amb.patientId ? amb.patientId.name : "-"}</td>
+          <td>${amb.fromHospital}</td>
+          <td>${amb.toHospital}</td>
+          <td>${dispatchedTime.toLocaleTimeString()}</td>
+          <td>${amb.etaMinutes} min (est. arrival ${arrivalEstimate.toLocaleTimeString()})</td>
+          <td><button onclick="completeTrip('${amb._id}')">Mark Arrived</button></td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function selectAmbulance(id, vehicleNumber) {
+      selectedAmbulanceId = id;
+      document.getElementById("bookingCard").style.display = "block";
+      document.getElementById("bookingAmbulanceLabel").textContent = `Booking: ${vehicleNumber}`;
+      document.getElementById("bookResult").textContent = "";
+    }
+
+    document.getElementById("bookForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      const resultBox = document.getElementById("bookResult");
+
+      try {
+        const res = await fetch(`${API_BASE}/ambulances/${selectedAmbulanceId}/book`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+
+        if (json.error) {
+          resultBox.textContent = "Error: " + json.error;
+        } else {
+          resultBox.textContent = `Booked! Distance: ${json.distanceKm} km — ETA: ${json.etaMinutes} minutes`;
+          e.target.reset();
+          refreshAll();
+        }
+      } catch (err) {
+        resultBox.textContent = "Error: could not reach the server.";
+      }
+    });
+
+    async function completeTrip(id) {
+      await fetch(`${API_BASE}/ambulances/${id}/complete`, { method: "PATCH" });
+      refreshAll();
+    }
+
+    function refreshAll() {
+      loadMap();
+      loadFreeAmbulances();
+      loadDispatchedAmbulances();
+    }
+
+    refreshAll();
+    setInterval(refreshAll, 5000);
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

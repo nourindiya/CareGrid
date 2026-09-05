@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Transfer Requests - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Hospital-to-Hospital Transfer Requests</h2>
+
+  <div class="card" id="createCard">
+    <h3>Send a Transfer Request</h3>
+    <form id="transferForm">
+      <input name="patientId" placeholder="Patient ID" required>
+      <input name="fromHospital" placeholder="From Hospital" required>
+      <input name="toHospital" placeholder="Preferred Hospital (optional)">
+      <input name="equipmentNeeded" placeholder="Equipment needed (comma separated)">
+      <button type="submit">Send Request</button>
+    </form>
+    <p id="transferResult"></p>
+  </div>
+
+  <h3 id="pendingHeading">Pending Requests</h3>
+  <table>
+    <thead id="pendingHead"></thead>
+    <tbody id="pendingList"></tbody>
+  </table>
+
+  <h3>Approved / Rejected History</h3>
+  <table>
+    <thead>
+      <tr><th>Patient</th><th>From</th><th>Assigned Hospital</th><th>Status</th></tr>
+    </thead>
+    <tbody id="historyList"></tbody>
+  </table>
+
+  <script src="api.js"></script>
+  <script>
+    const role = localStorage.getItem("role");
+    const isNetworkAdmin = role === "network_admin";
+
+    // Hospital Admin only creates requests, doesn't assign/approve
+    if (!isNetworkAdmin) {
+      document.getElementById("pendingHeading").textContent = "Your Pending Requests (waiting on Network Admin)";
+    } else {
+      document.getElementById("createCard").style.display = "none";
+    }
+
+    document.getElementById("pendingHead").innerHTML = isNetworkAdmin
+      ? `<tr><th>Patient</th><th>From</th><th>Preferred</th><th>Equipment</th><th>Assign a Bed</th></tr>`
+      : `<tr><th>Patient</th><th>From</th><th>Preferred</th><th>Equipment</th><th>Status</th></tr>`;
+
+    async function loadFreeBeds() {
+      const res = await fetch(`${API_BASE}/beds`);
+      const beds = await res.json();
+      return beds.filter((b) => b.status === "free");
+    }
+
+    async function loadTransfers() {
+      const res = await fetch(`${API_BASE}/transfers`);
+      const transfers = await res.json();
+      const freeBeds = isNetworkAdmin ? await loadFreeBeds() : [];
+
+      const pendingBody = document.getElementById("pendingList");
+      const historyBody = document.getElementById("historyList");
+      pendingBody.innerHTML = "";
+      historyBody.innerHTML = "";
+
+      transfers.forEach((t) => {
+        const patientName = t.patientId ? t.patientId.name : "Unknown";
+
+        if (t.status === "pending") {
+          const row = document.createElement("tr");
+
+          if (isNetworkAdmin) {
+            const bedOptions = freeBeds
+              .map((b) => `<option value="${b._id}">${b.hospitalName} — Bed ${b.bedNumber} (${b.ward || "General"})</option>`)
+              .join("");
+
+            row.innerHTML = `
+              <td>${patientName}</td>
+              <td>${t.fromHospital}</td>
+              <td>${t.toHospital || "-"}</td>
+              <td>${(t.equipmentNeeded || []).join(", ")}</td>
+              <td>
+                <select id="bedSelect-${t._id}">
+                  ${bedOptions || "<option>No free beds anywhere</option>"}
+                </select>
+                <button onclick="assignBed('${t._id}')" ${freeBeds.length === 0 ? "disabled" : ""}>Assign</button>
+                <button onclick="rejectTransfer('${t._id}')">Reject</button>
+              </td>
+            `;
+          } else {
+            row.innerHTML = `
+              <td>${patientName}</td>
+              <td>${t.fromHospital}</td>
+              <td>${t.toHospital || "-"}</td>
+              <td>${(t.equipmentNeeded || []).join(", ")}</td>
+              <td><span class="status-badge status-pending">Waiting on Network Admin</span></td>
+            `;
+          }
+          pendingBody.appendChild(row);
+        }
+
+        if (t.status === "approved" || t.status === "rejected") {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${patientName}</td>
+            <td>${t.fromHospital}</td>
+            <td>${t.assignedHospital || "-"}</td>
+            <td><span class="status-badge status-${t.status}">${t.status}</span></td>
+          `;
+          historyBody.appendChild(row);
+        }
+      });
+    }
+
+    async function assignBed(id) {
+      const select = document.getElementById(`bedSelect-${id}`);
+      const bedId = select.value;
+      const res = await fetch(`${API_BASE}/transfers/${id}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bedId }),
+      });
+      const json = await res.json();
+      if (json.error) alert(json.error);
+      loadTransfers();
+    }
+
+    async function rejectTransfer(id) {
+      await fetch(`${API_BASE}/transfers/${id}/reject`, { method: "PATCH" });
+      loadTransfers();
+    }
+
+    document.getElementById("transferForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const raw = Object.fromEntries(new FormData(e.target));
+      raw.equipmentNeeded = raw.equipmentNeeded
+        ? raw.equipmentNeeded.split(",").map((s) => s.trim())
+        : [];
+
+      const resultBox = document.getElementById("transferResult");
+      try {
+        const res = await fetch(`${API_BASE}/transfers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(raw),
+        });
+        const json = await res.json();
+        resultBox.textContent = json.message || json.error;
+        e.target.reset();
+        loadTransfers();
+      } catch (err) {
+        resultBox.textContent = "Error: could not reach the server.";
+      }
+    });
+
+    loadTransfers();
+    setInterval(loadTransfers, 5000);
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

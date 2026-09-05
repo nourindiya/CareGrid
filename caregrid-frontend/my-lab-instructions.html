@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Lab Advisories - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>My Lab Advisories</h2>
+  <p style="color:#666; font-size:13px;">Guidance based on your recent lab results. This is not a substitute for medical advice — always follow up with your doctor.</p>
+
+  <div id="instructionsList"></div>
+
+  <script src="api.js"></script>
+  <script>
+    async function loadInstructions() {
+        const container = document.getElementById("instructionsList");
+        const userId = localStorage.getItem("userId");
+
+        if (!userId) {
+            container.innerHTML = "<p>Could not find your account. Please log out and log back in.</p>";
+            return;
+        }
+
+        const res = await fetch(`${API_BASE}/lab-reports/my-instructions/${userId}`);
+        const reports = await res.json();
+
+        if (!Array.isArray(reports) || reports.length === 0) {
+            container.innerHTML = "<p>No advisories right now.</p>";
+            return;
+        }
+
+        container.innerHTML = reports.map((r) => `
+          <div class="card" style="border-left: 5px solid #f9a825;">
+            <p style="font-size:12px; color:#666;">${new Date(r.createdAt).toLocaleDateString()}</p>
+            <p><b>Advisory:</b></p>
+            <ul>
+                ${r.patientInstructions.map((instr) => `<li>${instr}</li>`).join("")}
+            </ul>
+            ${r.resolutionNote ? `
+                <div style="background:#f4f6f8; padding:10px; border-radius:6px; margin-top:10px;">
+                   <p style="margin:0; font-size:13px;"><b>Doctor's Note</b> (${r.resolvedBy || "Doctor"}, ${r.resolutionStatus}):</p>
+                   <p style="margin:5px 0 0 0; font-size:13px;">${r.resolutionNote}</p>
+                </div>
+            ` : `
+                <p style="font-size:12px; color:#999; margin-top:8px;">Awaiting doctor review.</p>
+            `}
+          </div>
+        `).join("");
+        }
+        
+    loadInstructions();
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

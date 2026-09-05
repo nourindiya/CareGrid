@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Shift Roster - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Doctor & Nurse Shift Roster</h2>
+
+  <div class="card">
+    <h3>Add a Shift</h3>
+    <form id="shiftForm">
+      <input name="staffName" placeholder="Staff Name" required>
+      <select name="role" required>
+        <option value="doctor">Doctor</option>
+        <option value="nurse">Nurse</option>
+      </select>
+      <input name="department" placeholder="Department (e.g. ICU)">
+      <input name="hospitalName" placeholder="Hospital Name" required>
+      <input name="shiftDate" type="date" required>
+      <select name="shiftType">
+        <option value="12hr">12 hours</option>
+        <option value="24hr">24 hours</option>
+      </select>
+      <input name="startTime" type="time" required>
+      <input name="endTime" type="time" required>
+      <button type="submit">Add Shift</button>
+    </form>
+    <p id="shiftResult"></p>
+  </div>
+
+  <h3>Current Roster</h3>
+  <table>
+    <thead>
+      <tr><th>Staff</th><th>Role</th><th>Department</th><th>Date</th><th>Time</th><th>Action</th></tr>
+    </thead>
+    <tbody id="rosterList"></tbody>
+  </table>
+
+  <script src="api.js"></script>
+  <script>
+    async function loadRoster() {
+      const res = await fetch(`${API_BASE}/shifts`);
+      const shifts = await res.json();
+      const tbody = document.getElementById("rosterList");
+      tbody.innerHTML = "";
+
+      shifts.forEach((s) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${s.staffName}</td>
+          <td>${s.role}</td>
+          <td>${s.department || "-"}</td>
+          <td>${s.shiftDate}</td>
+          <td>${s.startTime} - ${s.endTime}</td>
+          <td><button onclick="removeShift('${s._id}')">Remove</button></td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    async function removeShift(id) {
+      await fetch(`${API_BASE}/shifts/${id}`, { method: "DELETE" });
+      loadRoster();
+    }
+
+    document.getElementById("shiftForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      const resultBox = document.getElementById("shiftResult");
+
+      const res = await fetch(`${API_BASE}/shifts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+
+      if (json.error) {
+        resultBox.textContent = json.error;
+      } else {
+        resultBox.textContent = "Shift added";
+        e.target.reset();
+        loadRoster();
+      }
+    });
+
+    loadRoster();
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

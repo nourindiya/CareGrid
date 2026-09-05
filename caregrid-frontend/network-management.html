@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Network Management - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Network Management</h2>
+
+  <div class="card">
+    <h3>Add a Hospital to the Network</h3>
+    <form id="addHospitalForm">
+      <input name="name" placeholder="Hospital Name" required>
+      <input name="location" placeholder="Location">
+      <button type="submit">Add Hospital</button>
+    </form>
+  </div>
+
+  <h3>Connected Hospitals</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Location</th>
+        <th>Status</th>
+        <th>Beds Access</th>
+        <th>Appointments Access</th>
+        <th>Transfers Access</th>
+      </tr>
+    </thead>
+    <tbody id="hospitalList"></tbody>
+  </table>
+
+  <script src="api.js"></script>
+  <script>
+    async function loadHospitals() {
+      const res = await fetch(`${API_BASE}/hospitals`);
+      const hospitals = await res.json();
+      const tbody = document.getElementById("hospitalList");
+      tbody.innerHTML = "";
+
+      hospitals.forEach((h) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${h.name}</td>
+          <td>${h.location || "-"}</td>
+          <td>
+            <select onchange="updateHospital('${h._id}', 'status', this.value)">
+              <option value="active" ${h.status === "active" ? "selected" : ""}>Active</option>
+              <option value="suspended" ${h.status === "suspended" ? "selected" : ""}>Suspended</option>
+            </select>
+          </td>
+          <td><input type="checkbox" ${h.dataAccess.beds ? "checked" : ""} onchange="updateAccess('${h._id}', 'beds', this.checked)"></td>
+          <td><input type="checkbox" ${h.dataAccess.appointments ? "checked" : ""} onchange="updateAccess('${h._id}', 'appointments', this.checked)"></td>
+          <td><input type="checkbox" ${h.dataAccess.transfers ? "checked" : ""} onchange="updateAccess('${h._id}', 'transfers', this.checked)"></td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    async function updateHospital(id, field, value) {
+      await fetch(`${API_BASE}/hospitals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      loadHospitals();
+    }
+
+    async function updateAccess(id, key, checked) {
+      const res = await fetch(`${API_BASE}/hospitals`);
+      const hospitals = await res.json();
+      const hospital = hospitals.find((h) => h._id === id);
+      const newAccess = { ...hospital.dataAccess, [key]: checked };
+
+      await fetch(`${API_BASE}/hospitals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataAccess: newAccess }),
+      });
+      loadHospitals();
+    }
+
+    document.getElementById("addHospitalForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      await fetch(`${API_BASE}/hospitals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      e.target.reset();
+      loadHospitals();
+    });
+
+    loadHospitals();
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

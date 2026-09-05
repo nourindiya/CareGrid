@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Payment Result - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Payment Result</h1>
+  <div class="card" id="resultCard"></div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const tranId = params.get("tranId");
+
+    const card = document.getElementById("resultCard");
+    if (status === "success") {
+      card.innerHTML = `<p style="color:green;">Deposit paid successfully. Transaction ID: ${tranId}</p>`;
+    } else if (status === "fail") {
+      card.innerHTML = `<p style="color:red;">Payment failed. Please try again.</p>`;
+    } else {
+      card.innerHTML = `<p style="color:orange;">Payment cancelled.</p>`;
+    }
+  </script>
+</body>
+</html>
