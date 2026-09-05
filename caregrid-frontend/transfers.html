@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html>
-
 <head>
   <title>Transfer Requests - CareGrid</title>
   <link rel="stylesheet" href="style.css">
   <script src="auth-guard.js"></script>
 </head>
-
 <body>
   <nav id="mainNav"></nav>
+
   <h2>Hospital-to-Hospital Transfer Requests</h2>
 
   <div class="card" id="createCard">
@@ -32,12 +31,7 @@
   <h3>Approved / Rejected History</h3>
   <table>
     <thead>
-      <tr>
-        <th>Patient</th>
-        <th>From</th>
-        <th>Assigned Hospital</th>
-        <th>Status</th>
-      </tr>
+      <tr><th>Patient</th><th>From</th><th>Assigned Hospital</th><th>Status</th></tr>
     </thead>
     <tbody id="historyList"></tbody>
   </table>
@@ -46,7 +40,6 @@
   <script>
     const role = localStorage.getItem("role");
     const isNetworkAdmin = role === "network_admin";
-    const isHospitalAdmin = role === "hospital_admin";
 
     // Hospital Admin only creates requests, doesn't assign/approve
     if (!isNetworkAdmin) {
@@ -171,5 +164,4 @@
 
   <script src="nav.js"></script>
 </body>
-
 </html>

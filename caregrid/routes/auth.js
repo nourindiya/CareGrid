@@ -8,6 +8,7 @@ router.post("/signup", async (req, res) => {
   try {
     const { name, email, phone, password, role, hospitalName } = req.body;
 
+    // Anyone who isn't a patient must provide a hospital name
     if (role !== "patient" && !hospitalName) {
       return res.status(400).json({ error: "Hospital name is required for this role" });
     }
@@ -27,7 +28,7 @@ router.post("/signup", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// Login
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -43,15 +44,13 @@ router.post("/login", async (req, res) => {
 
     res.json({
       message: "Login successful",
-      token: token,
+      token,
       name: user.name,
       role: user.role,
       hospitalName: user.hospitalName || null,
-      userId: String(user._id),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
 module.exports = router;
