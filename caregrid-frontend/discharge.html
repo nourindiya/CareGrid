@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Discharge Patient - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Discharge Patient</h2>
+  <p style="color:#666; font-size:13px;">
+    Enter the Patient ID only — their latest prescription and current bed are found automatically.
+  </p>
+
+  <div class="card">
+    <form id="dischargeForm">
+      <input name="patientId" placeholder="Patient ID" required>
+      <button type="submit">Discharge & Generate Summary</button>
+    </form>
+    <p id="dischargeResult"></p>
+    <a id="pdfLink" href="#" target="_blank" style="display:none;">View Discharge Summary PDF</a>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    document.getElementById("dischargeForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const patientId = document.getElementById("dischargeForm").patientId.value;
+
+      const res = await fetch(`${API_BASE}/discharge/${patientId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+
+      const resultBox = document.getElementById("dischargeResult");
+      if (json.message) {
+        resultBox.textContent = json.message;
+        const link = document.getElementById("pdfLink");
+        link.href = `http://localhost:5000${json.pdfUrl}`;
+        link.style.display = "inline";
+      } else {
+        resultBox.textContent = json.error;
+      }
+    });
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

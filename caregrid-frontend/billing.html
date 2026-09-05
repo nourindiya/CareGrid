@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Payment & Billing - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Payment & Billing</h2>
+
+  <div class="card">
+    <h3>Create a Bill</h3>
+    <input id="patientIdInput" placeholder="Patient ID">
+
+    <table>
+      <thead>
+        <tr><th>Item</th><th>Unit Cost</th><th>Quantity</th><th>Add</th></tr>
+      </thead>
+      <tbody id="itemsTable"></tbody>
+    </table>
+
+    <h4>Selected Items</h4>
+    <table>
+      <thead>
+        <tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Line Total</th><th>Remove</th></tr>
+      </thead>
+      <tbody id="selectedTable"></tbody>
+    </table>
+    <p><b>Total: <span id="runningTotal">0</span> BDT</b></p>
+
+    <button type="button" id="createBillBtn">Create Bill</button>
+    <p id="createResult"></p>
+  </div>
+
+  <div class="card">
+    <h3>Check Bill Status / Pay Deposit</h3>
+    <input id="lookupTranId" placeholder="Transaction ID">
+    <button type="button" id="lookupBtn">Load Bill</button>
+
+    <div id="billDetails" style="display:none; margin-top:15px;">
+      <p id="billSummary"></p>
+      <table id="billLinesTable">
+        <thead><tr><th>Item</th><th>Qty</th><th>Unit Cost</th><th>Line Total</th></tr></thead>
+        <tbody id="billLinesBody"></tbody>
+      </table>
+
+      <div style="margin-top:15px;">
+        <input id="depositInput" type="number" placeholder="Deposit Amount (BDT)">
+        <button type="button" id="payDepositBtn">Pay Deposit</button>
+      </div>
+
+      <div class="card" id="invoiceCard" style="margin-top:15px;">
+        <h4>Invoice</h4>
+        <p id="invoiceText" style="white-space: pre-line;"></p>
+      </div>
+    </div>
+    <p id="lookupResult"></p>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    let selectedItems = [];
+    let allItems = [];
+
+    async function loadItems() {
+      const res = await fetch(`${API_BASE}/payments/items`);
+      allItems = await res.json();
+      const tbody = document.getElementById("itemsTable");
+      tbody.innerHTML = "";
+
+      allItems.forEach((item) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${item.name}</td>
+          <td>${item.unitCost} BDT</td>
+          <td><input type="number" min="1" value="1" id="qty-${item._id}" style="width:60px;"></td>
+          <td><button onclick="addItem('${item._id}')">Add</button></td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+    loadItems();
+
+    function addItem(itemId) {
+      const item = allItems.find((i) => i._id === itemId);
+      const qty = parseInt(document.getElementById(`qty-${itemId}`).value) || 1;
+
+      selectedItems.push({ itemName: item.name, quantity: qty, unitCost: item.unitCost });
+      renderSelected();
+    }
+
+    function removeItem(index) {
+      selectedItems.splice(index, 1);
+      renderSelected();
+    }
+
+    function renderSelected() {
+      const tbody = document.getElementById("selectedTable");
+      tbody.innerHTML = "";
+      let total = 0;
+
+      selectedItems.forEach((line, index) => {
+        const lineTotal = line.quantity * line.unitCost;
+        total += lineTotal;
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${line.itemName}</td>
+          <td>${line.quantity}</td>
+          <td>${line.unitCost} BDT</td>
+          <td>${lineTotal} BDT</td>
+          <td><button onclick="removeItem(${index})">Remove</button></td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      document.getElementById("runningTotal").textContent = total;
+    }
+
+    document.getElementById("createBillBtn").addEventListener("click", async () => {
+      const patientId = document.getElementById("patientIdInput").value;
+      if (!patientId) return alert("Enter a Patient ID");
+      if (selectedItems.length === 0) return alert("Add at least one item to the bill");
+
+      const res = await fetch(`${API_BASE}/payments/create-bill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientId, billLines: selectedItems }),
+      });
+      const json = await res.json();
+
+      if (json.payment) {
+        document.getElementById("createResult").textContent =
+          `Bill created — Transaction ID: ${json.payment.transactionId} (copy this to check status / pay deposit below)`;
+        selectedItems = [];
+        renderSelected();
+        document.getElementById("patientIdInput").value = "";
+      } else {
+        document.getElementById("createResult").textContent = json.error || "Something went wrong";
+      }
+    });
+
+    async function loadBill() {
+      const tranId = document.getElementById("lookupTranId").value;
+      if (!tranId) return alert("Enter a Transaction ID");
+
+      const res = await fetch(`${API_BASE}/payments/${tranId}`);
+      const payment = await res.json();
+
+      if (payment.error) {
+        document.getElementById("lookupResult").textContent = payment.error;
+        document.getElementById("billDetails").style.display = "none";
+        return;
+      }
+
+      document.getElementById("lookupResult").textContent = "";
+      document.getElementById("billDetails").style.display = "block";
+      document.getElementById("billSummary").innerHTML =
+        `<b>Patient:</b> ${payment.patientId ? payment.patientId.name : "-"} &nbsp; | &nbsp;
+         <b>Total Bill:</b> ${payment.totalBill} BDT &nbsp; | &nbsp;
+         <b>Deposit Paid:</b> ${payment.depositPaid} BDT &nbsp; | &nbsp;
+         <b>Amount Due:</b> ${payment.amountDue} BDT &nbsp; | &nbsp;
+         <b>Status:</b> <span class="status-badge status-${payment.status === "settled" ? "approved" : "pending"}">${payment.status}</span>`;
+
+      const linesBody = document.getElementById("billLinesBody");
+      linesBody.innerHTML = "";
+      payment.billLines.forEach((line) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${line.itemName}</td><td>${line.quantity}</td><td>${line.unitCost} BDT</td><td>${line.lineTotal} BDT</td>`;
+        linesBody.appendChild(row);
+      });
+
+      document.getElementById("invoiceText").textContent =
+        `CareGrid Invoice\n` +
+        `Transaction ID: ${payment.transactionId}\n` +
+        `Patient: ${payment.patientId ? payment.patientId.name : "-"}\n` +
+        `----------------------------------\n` +
+        payment.billLines.map((l) => `${l.itemName} x${l.quantity} = ${l.lineTotal} BDT`).join("\n") +
+        `\n----------------------------------\n` +
+        `Total Bill: ${payment.totalBill} BDT\n` +
+        `Deposit Paid: ${payment.depositPaid} BDT\n` +
+        `Amount Due: ${payment.amountDue} BDT\n` +
+        `Status: ${payment.status}`;
+    }
+
+    document.getElementById("lookupBtn").addEventListener("click", loadBill);
+
+    document.getElementById("payDepositBtn").addEventListener("click", async () => {
+      const tranId = document.getElementById("lookupTranId").value;
+      const amount = document.getElementById("depositInput").value;
+      if (!amount) return alert("Enter a deposit amount");
+
+      const res = await fetch(`${API_BASE}/payments/${tranId}/deposit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      const json = await res.json();
+
+      if (json.payment) {
+        document.getElementById("depositInput").value = "";
+        loadBill(); // refresh the display with updated status
+      } else {
+        alert(json.error || "Something went wrong");
+      }
+    });
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

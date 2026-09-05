@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Book Appointment - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Book Appointment</h2>
+
+  <div class="card">
+    <form id="bookingForm">
+      <input name="name" placeholder="Patient Name" required>
+      <input name="age" type="number" placeholder="Age" required>
+      <input name="phone" placeholder="Phone Number" required>
+      <input name="healthProblem" placeholder="What's the problem? (e.g. fever, chest pain)" required>
+      <input name="hospitalName" placeholder="Which hospital are you at? (e.g. City Hospital)" required>
+
+      <label style="font-size:13px; color:#666; margin-top:8px;">Preferred Doctor (optional)</label>
+      <select name="doctorName" id="doctorSelect">
+        <option value="">Any available doctor</option>
+      </select>
+
+      <button type="submit">Book</button>
+    </form>
+    <p id="result"></p>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    async function loadDoctors() {
+      try {
+        const res = await fetch(`${API_BASE}/doctors`);
+        const doctors = await res.json();
+        const select = document.getElementById("doctorSelect");
+        doctors.forEach((doc) => {
+          const option = document.createElement("option");
+          option.value = doc.name;
+          option.textContent = `${doc.name}${doc.specialty ? " — " + doc.specialty : ""}`;
+          select.appendChild(option);
+        });
+      } catch (err) {
+        console.log("Could not load doctors list");
+      }
+    }
+    loadDoctors();
+
+    document.getElementById("bookingForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      data.userId = localStorage.getItem("userId") || null;
+
+      const resultBox = document.getElementById("result");
+      resultBox.textContent = "Booking...";
+
+      try {
+        const res = await fetch(`${API_BASE}/appointments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+        resultBox.textContent = json.message + (json.bed ? ` (Bed ${json.bed.bedNumber}, ${json.bed.hospitalName})` : "") + (json.patientId ? ` — Patient ID: ${json.patientId}` : "");
+        e.target.reset();
+      } catch (err) {
+        resultBox.textContent = "Error: could not reach the server. Is the backend running?";
+      }
+    });
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Critical Alerts - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Critical Lab Alerts</h2>
+  <div id="alertsList"></div>
+
+  <script src="api.js"></script>
+  <script>
+    async function loadCriticalAlerts() {
+      const res = await fetch(`${API_BASE}/lab-reports/critical`);
+      const reports = await res.json();
+      const container = document.getElementById("alertsList");
+
+      if (reports.length === 0) {
+        container.innerHTML = "<p>No critical lab alerts right now.</p>";
+        return;
+      }
+
+      container.innerHTML = reports.map((r) => `
+        <div class="card" style="border-left: 5px solid #c62828;">
+          <p><b>Patient:</b> ${r.patientId ? r.patientId.name : "-"} &nbsp; <span style="font-size:11px; color:#666;">Patient ID: ${r.patientId ? r.patientId._id : "-"}</span></p>
+          <p><b>Flagged Values:</b></p>
+          <ul>
+            ${r.criticalFlags.map((f) => `<li>${f.test}: ${f.value} (safe range: ${f.safeRange}) — <b>${f.severity}</b></li>`).join("")}
+          </ul>
+          <p style="font-size:12px; color:#666;">Scanned: ${new Date(r.createdAt).toLocaleString()}</p>
+          <p><b>Status:</b> <span class="status-badge status-${r.resolutionStatus === "resolved" ? "approved" : "pending"}">${r.resolutionStatus}</span>
+            ${r.resolutionNote ? `<br><span style="font-size:12px;">Last note: ${r.resolutionNote} — ${r.resolvedBy || ""}</span>` : ""}
+          </p>
+
+          <div style="margin-top:10px; padding-top:10px; border-top:1px solid #eee;">
+            <input id="note-${r._id}" placeholder="Quick note (required)" style="margin-bottom:8px;">
+            <div style="display:flex; gap:8px;">
+              <button type="button" onclick="updateStatus('${r._id}', 'acknowledged')" style="width:auto; flex:1;">Acknowledge</button>
+              <button type="button" onclick="updateStatus('${r._id}', 'snoozed')" style="width:auto; flex:1;">Snooze 4h</button>
+              <button type="button" onclick="updateStatus('${r._id}', 'resolved')" style="width:auto; flex:1; background:#2e7d32;">Resolve</button>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function updateStatus(reportId, status) {
+      const noteInput = document.getElementById(`note-${reportId}`);
+      const note = noteInput.value.trim();
+
+      if (!note) {
+        alert("Please enter a quick note before updating this alert.");
+        return;
+      }
+
+      const doctorName = localStorage.getItem("name") || "Doctor";
+
+      const res = await fetch(`${API_BASE}/lab-reports/${reportId}/resolve`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resolutionStatus: status,
+          resolutionNote: note,
+          resolvedBy: doctorName,
+          snoozeHours: 4,
+        }),
+      });
+      const json = await res.json();
+
+      if (json.error) {
+        alert(json.error);
+        return;
+      }
+
+      loadCriticalAlerts();
+    }
+
+    loadCriticalAlerts();
+    setInterval(loadCriticalAlerts, 5000);
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

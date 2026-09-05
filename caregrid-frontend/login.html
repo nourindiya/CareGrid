@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Login - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <script>
+    const existingRole = localStorage.getItem("role");
+    if (existingRole) {
+      window.location.href = `dashboard-${existingRole.replace("_", "-")}.html`;
+    }
+  </script>
+
+  <h1>CareGrid</h1>
+
+  <div class="card">
+    <h2>Login</h2>
+    <form id="loginForm">
+      <input name="email" placeholder="Email" required>
+      <input name="password" type="password" placeholder="Password" required>
+      <button type="submit">Login</button>
+    </form>
+    <p id="loginResult"></p>
+    <p>No account? <a href="signup.html">Sign up</a></p>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+
+        if (json.token) {
+          localStorage.setItem("token", json.token);
+          localStorage.setItem("role", json.role);
+          localStorage.setItem("name", json.name);
+          localStorage.setItem("hospitalName", json.hospitalName || "");
+          localStorage.setItem("userId", json.userId);
+
+          document.getElementById("loginResult").textContent = "Login successful! Redirecting...";
+
+          setTimeout(() => {
+            if (json.role === "patient") window.location.href = "dashboard-patient.html";
+            else if (json.role === "nurse") window.location.href = "dashboard-nurse.html";
+            else if (json.role === "doctor") window.location.href = "dashboard-doctor.html";
+            else if (json.role === "hospital_admin") window.location.href = "dashboard-hospital-admin.html";
+            else if (json.role === "network_admin") window.location.href = "dashboard-network-admin.html";
+            else window.location.href = "index.html";
+          }, 500);
+        } else {
+          document.getElementById("loginResult").textContent = json.error || "Login failed";
+        }
+      } catch (err) {
+        document.getElementById("loginResult").textContent = "Error: could not reach the server. Is the backend running?";
+      }
+    });
+  </script>
+</body>
+</html>

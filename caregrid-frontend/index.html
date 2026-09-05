@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h1>CareGrid</h1>
+  <div class="card">
+    <p>Welcome to CareGrid — Integrated Hospital & Triage Logistics.</p>
+    <p>Use the menu above to navigate between features.</p>
+  </div>
+
+  <script src="api.js"></script>
+  <script src="nav.js"></script>
+  <script>
+    const role = localStorage.getItem("role");
+    if (role) {
+      window.location.href = `dashboard-${role.replace("_", "-")}.html`;
+    }
+  </script>
+</body>
+</html>

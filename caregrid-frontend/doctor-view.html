@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Patients - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+  <style>
+    .tab-buttons { margin-bottom: 15px; }
+    .tab-buttons button { display: inline-block; width: auto; margin-right: 10px; padding: 10px 20px; }
+    .tab-buttons button.active { background: #16304d; }
+    .lab-report-row { padding: 8px; margin: 6px 0; border-radius: 6px; font-size: 13px; }
+    .lab-report-row.critical { background: #ffebee; border-left: 4px solid #c62828; }
+    .lab-report-row.normal { background: #f4f6f8; border-left: 4px solid #2e7d32; }
+  </style>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Patients</h2>
+
+  <div class="tab-buttons">
+    <button type="button" id="admittedTabBtn" class="active" onclick="switchTab('admitted')">Admitted Patients</button>
+    <button type="button" id="visitTabBtn" onclick="switchTab('visit')">Normal Visit Patients</button>
+  </div>
+
+  <div id="patientCards"></div>
+
+  <script src="api.js"></script>
+  <script>
+    let currentTab = "admitted";
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById("admittedTabBtn").classList.toggle("active", tab === "admitted");
+      document.getElementById("visitTabBtn").classList.toggle("active", tab === "visit");
+      loadPatients();
+    }
+
+    async function loadPatients() {
+      const res = await fetch(`${API_BASE}/vitals/doctor-view/${currentTab}`);
+      const data = await res.json();
+      const container = document.getElementById("patientCards");
+
+      if (data.length === 0) {
+        container.innerHTML = `<p>No ${currentTab === "admitted" ? "admitted" : "waiting visit"} patients right now.</p>`;
+        return;
+      }
+
+      container.innerHTML = data.map(({ patient, latestVitals, labReports, prescriptions }) => {
+        const prescriptionSummary = prescriptions.length > 0
+          ? (prescriptions[0].medicines.map((m) => m.name).join(", ") || "No medicines listed")
+          : "No prescription yet";
+
+        let labReportsHtml = "<p style='font-size:13px; color:#666;'>No lab reports yet.</p>";
+        if (labReports.length > 0) {
+          labReportsHtml = labReports.map((r) => {
+            const v = r.extractedValues;
+            const flagText = r.isCritical
+              ? "⚠ CRITICAL: " + r.criticalFlags.map((f) => `${f.test} = ${f.value} (safe: ${f.safeRange})`).join(", ")
+              : "All values within safe range";
+
+            return `
+              <div class="lab-report-row ${r.isCritical ? "critical" : "normal"}">
+                <b>${new Date(r.createdAt).toLocaleString()}</b><br>
+                Hb: ${v.hemoglobin ?? "-"} | Sugar: ${v.bloodSugar ?? "-"} | WBC: ${v.wbc ?? "-"}<br>
+                ${flagText}
+              </div>
+            `;
+          }).join("");
+        }
+
+        return `
+          <div class="card">
+            <p><b>${patient.name}</b> — ${patient.healthProblem || "-"} &nbsp; <span style="font-size:11px; color:#666;">ID: ${patient._id}</span></p>
+            <p><b>Urgency Score:</b> ${patient.urgencyScore}</p>
+            <p><b>Latest Vitals:</b> ${latestVitals ? `HR ${latestVitals.heartRate}, BP ${latestVitals.bloodPressure}, O2 ${latestVitals.oxygenLevel}%` : "Not recorded yet"}</p>
+            <p><b>Latest Prescription:</b> ${prescriptionSummary}</p>
+
+            <details ${labReports.some(r => r.isCritical) ? "open" : ""}>
+              <summary style="cursor:pointer; font-weight:bold;">
+                Lab Reports (${labReports.length}) ${labReports.some(r => r.isCritical) ? "⚠ Critical values found" : ""}
+              </summary>
+              ${labReportsHtml}
+            </details>
+          </div>
+        `;
+      }).join("");
+    }
+
+    loadPatients();
+    setInterval(loadPatients, 5000);
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>
