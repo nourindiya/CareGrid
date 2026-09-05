@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sign Up - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <script>
+    const existingRole = localStorage.getItem("role");
+    if (existingRole) {
+      window.location.href = `dashboard-${existingRole.replace("_", "-")}.html`;
+    }
+  </script>
+
+  <h1>CareGrid</h1>
+
+  <div class="card">
+    <h2>Sign Up</h2>
+    <form id="signupForm">
+      <input name="name" placeholder="Full Name" required>
+      <input name="email" type="email" placeholder="Email" required>
+      <input name="phone" placeholder="Phone" required>
+      <input name="password" type="password" placeholder="Password" required>
+
+      <select name="role" id="roleSelect" required>
+        <option value="">Select Role</option>
+        <option value="patient">Patient</option>
+        <option value="medical_staff">Medical Staff (Nurse/Doctor)</option>
+        <option value="hospital_admin">Hospital Operations Manager</option>
+        <option value="network_admin">Network Administrator</option>
+      </select>
+
+      <input
+        name="hospitalName"
+        id="hospitalNameField"
+        placeholder="Hospital Name"
+        style="display: none;"
+      >
+
+      <button type="submit">Sign Up</button>
+    </form>
+    <p id="signupResult"></p>
+    <p>Already have an account? <a href="login.html">Login</a></p>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    const roleSelect = document.getElementById("roleSelect");
+    const hospitalField = document.getElementById("hospitalNameField");
+
+    roleSelect.addEventListener("change", () => {
+      if (roleSelect.value && roleSelect.value !== "patient") {
+        hospitalField.style.display = "block";
+        hospitalField.required = true;
+      } else {
+        hospitalField.style.display = "none";
+        hospitalField.required = false;
+        hospitalField.value = "";
+      }
+    });
+
+    document.getElementById("signupForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      try {
+        const res = await fetch(`${API_BASE}/auth/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+        document.getElementById("signupResult").textContent = json.message || json.error;
+        if (json.message) window.location.href = "login.html";
+      } catch (err) {
+        document.getElementById("signupResult").textContent = "Error: could not reach the server. Is the backend running?";
+      }
+    });
+  </script>
+</body>
+</html>
