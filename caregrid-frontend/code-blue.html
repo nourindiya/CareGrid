@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Code Blue - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Emergency Code Blue Alert</h2>
+  <div class="card">
+    <form id="codeBlueForm">
+      <input name="patientName" placeholder="Patient Name" required>
+      <input name="location" placeholder="Location (e.g. Ward 3, Bed A1)" required>
+      <input name="triggeredBy" placeholder="Your Name" required>
+      <button type="submit" style="background:#c62828;">🚨 Trigger Code Blue</button>
+    </form>
+    <p id="codeBlueResult"></p>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    document.getElementById("codeBlueForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+
+      const res = await fetch(`${API_BASE}/alerts/code-blue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+
+      document.getElementById("codeBlueResult").textContent = json.discordResult.simulated
+        ? "Alert simulated (Discord webhook not configured)"
+        : "Alert sent to all departments!";
+      e.target.reset();
+    });
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

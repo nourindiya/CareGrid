@@ -4,6 +4,10 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 router.post("/signup", async (req, res) => {
   try {
     const { name, email, phone, password, role, hospitalName } = req.body;
@@ -49,6 +53,25 @@ router.post("/login", async (req, res) => {
       hospitalName: user.hospitalName || null,
       userId: String(user._id),
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/users", async (req, res) => {
+  try {
+    const { role, hospitalName } = req.query;
+    const query = {};
+
+    if (role) query.role = role;
+    if (hospitalName) {
+      const normalizedHospitalName = hospitalName.trim();
+      const hospitalNameToken = normalizedHospitalName.split(/\s+/)[0];
+      query.hospitalName = new RegExp(`^${escapeRegex(hospitalNameToken)}`, "i");
+    }
+
+    const users = await User.find(query).select("_id name role hospitalName").sort({ name: 1 });
+    res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

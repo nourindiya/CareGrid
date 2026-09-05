@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Book Ambulance - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Book an Ambulance</h2>
+  <div class="card">
+    <p style="font-size:13px; color:#666;">
+      Use the Patient ID shown after you book an appointment, or find it in MongoDB Compass.
+    </p>
+    <form id="ambulanceForm">
+      <input name="patientId" placeholder="Patient ID" required>
+      <input name="pickupLocation" placeholder="Pickup Location (e.g. House 12, Road 5)" required>
+      <button type="submit">Book Ambulance</button>
+    </form>
+    <p id="ambulanceResult"></p>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    document.getElementById("ambulanceForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      const resultBox = document.getElementById("ambulanceResult");
+      resultBox.textContent = "Booking...";
+
+      try {
+        const res = await fetch(`${API_BASE}/ambulances/book`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+        resultBox.textContent = json.message
+          ? `${json.message} — Vehicle ${json.ambulance.vehicleNumber}`
+          : json.error;
+        e.target.reset();
+      } catch (err) {
+        resultBox.textContent = "Error: could not reach the server.";
+      }
+    });
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

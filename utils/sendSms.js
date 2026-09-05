@@ -1,32 +1,29 @@
 async function sendCriticalAlert(message) {
   try {
-    const phone = process.env.DOCTOR_ALERT_PHONE_INTL; // full international format with +
+    const webhookUrl = process.env.DISCORD_VITALS_WEBHOOK_URL;
 
-    if (!phone) {
-      console.log("No phone configured — SMS simulated:", message);
+    if (!webhookUrl) {
+      console.log("Discord vitals webhook not configured — alert simulated:", message);
       return { simulated: true, message };
     }
 
-    const response = await fetch("https://textbelt.com/text", {
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        phone: phone,
-        message: message,
-        key: "textbelt", // free shared test key — 1 free SMS per day per IP
+        content: `🚨 **CRITICAL VITALS ALERT** 🚨\n${message}`,
       }),
     });
 
-    const result = await response.json();
-
-    if (result.success) {
-      return { simulated: false, textId: result.textId };
+    if (response.ok) {
+      return { simulated: false, sent: true };
     } else {
-      console.log("Textbelt SMS failed:", result.error);
-      return { simulated: true, error: result.error };
+      const errText = await response.text();
+      console.log("Discord vitals alert failed:", errText);
+      return { simulated: true, error: errText };
     }
   } catch (err) {
-    console.log("SMS failed, falling back to simulation:", err.message);
+    console.log("Alert failed, falling back to simulation:", err.message);
     return { simulated: true, error: err.message };
   }
 }

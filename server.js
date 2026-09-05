@@ -21,17 +21,21 @@ const shiftRoutes = require("./routes/shifts");
 const alertRoutes = require("./routes/alerts");
 
 const app = express();
+const frontendDir = path.join(__dirname, "caregrid-frontend");
+
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use("/api/auth", authRoutes);
 app.use("/api/lab-reports", labReportRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.use("/api/prescriptions", prescriptionRoutes);
 app.use("/api/payments", paymentRoutes);
-app.use(express.urlencoded({ extended: true }));
 app.use("/api/forecast", forecastRoutes);
 app.use("/api/discharge", dischargeRoutes);
 app.use("/discharge-summaries", express.static(path.join(__dirname, "discharge-summaries")));
+app.use(express.static(frontendDir));
 connectDB();
 
 app.use("/api/beds", bedRoutes);
@@ -43,8 +47,13 @@ app.use("/api/hospitals", hospitalRoutes);
 app.use("/api/doctors", doctorRoutes);
 app.use("/api/shifts", shiftRoutes);
 app.use("/api/alerts", alertRoutes);
+
 app.get("/", (req, res) => {
-  res.send("CareGrid backend is running");
+  res.sendFile(path.join(frontendDir, "login.html"));
+});
+
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", message: "CareGrid backend is running" });
 });
 
 const PORT = process.env.PORT || 5000;

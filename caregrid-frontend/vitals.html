@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Urgency Check-In - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Urgency Check-In</h2>
+
+  <div class="card">
+    <p style="font-size:13px; color:#666;">
+      Tip: get a real Patient ID from MongoDB Compass (open the <b>patients</b> collection),
+      or book a patient first on the Booking page and copy their ID from the success message.
+    </p>
+    <form id="vitalsForm">
+      <input name="patientId" placeholder="Patient ID" required>
+      <input name="heartRate" type="number" placeholder="Heart Rate (bpm)" required>
+      <input name="bloodPressure" placeholder="Blood Pressure (e.g. 120/80)" required>
+      <input name="oxygenLevel" type="number" placeholder="Oxygen Level (%)" required>
+      <button type="submit">Submit Vitals</button>
+    </form>
+    <p id="vitalsResult"></p>
+  </div>
+
+  <div class="card" id="bookingCard" style="display:none;">
+    <h3>Book Appointment for This Patient</h3>
+    <p id="patientSummary"></p>
+
+    <label style="font-size:13px; color:#666;">Preferred Doctor (optional)</label>
+    <select id="doctorSelect">
+      <option value="">Any available doctor</option>
+    </select>
+
+    <button type="button" id="bookAppointmentBtn">Book Appointment</button>
+    <p id="bookingResult"></p>
+  </div>
+
+  <h3>Waiting List (most urgent first)</h3>
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Health Problem</th><th>Urgency Score</th></tr>
+    </thead>
+    <tbody id="waitingList"></tbody>
+  </table>
+
+  <script src="api.js"></script>
+  <script>
+    let currentPatientId = null;
+
+    async function loadWaitingList() {
+      const res = await fetch(`${API_BASE}/vitals/waiting-list`);
+      const patients = await res.json();
+      const tbody = document.getElementById("waitingList");
+      tbody.innerHTML = "";
+      patients.forEach((p) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${p.name}</td><td>${p.healthProblem || "-"}</td><td>${p.urgencyScore}</td>`;
+        tbody.appendChild(row);
+      });
+    }
+
+    async function loadDoctors() {
+      try {
+        const res = await fetch(`${API_BASE}/doctors`);
+        const doctors = await res.json();
+        const select = document.getElementById("doctorSelect");
+        doctors.forEach((doc) => {
+          const option = document.createElement("option");
+          option.value = doc.name;
+          option.textContent = `${doc.name}${doc.specialty ? " — " + doc.specialty : ""}`;
+          select.appendChild(option);
+        });
+      } catch (err) {
+        console.log("Could not load doctors");
+      }
+    }
+    loadDoctors();
+
+    document.getElementById("vitalsForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      const resultBox = document.getElementById("vitalsResult");
+
+      try {
+        const res = await fetch(`${API_BASE}/vitals`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+
+        if (json.error) {
+          resultBox.textContent = "Error: " + json.error;
+          document.getElementById("bookingCard").style.display = "none";
+        } else {
+          resultBox.textContent = `Vitals recorded — Urgency Score: ${json.score}`;
+          if (json.smsAlert) {
+            if (json.smsAlert.simulated) {
+              resultBox.textContent += ` (Critical — SMS alert triggered and logged. Live delivery unavailable: SMS provider does not support Bangladesh on free tier)`;
+            } else {
+              resultBox.textContent += " (Critical — real SMS sent!)";
+            }
+          }
+
+          // Show the booking section for this patient
+          currentPatientId = json.patient._id;
+          document.getElementById("patientSummary").textContent =
+            `Patient: ${json.patient.name} — Problem: ${json.patient.healthProblem || "N/A"} — Urgency Score: ${json.score}`;
+          document.getElementById("bookingCard").style.display = "block";
+          document.getElementById("bookingResult").textContent = "";
+        }
+
+        loadWaitingList();
+      } catch (err) {
+        resultBox.textContent = "Error: could not reach the server.";
+      }
+    });
+
+    document.getElementById("bookAppointmentBtn").addEventListener("click", async () => {
+      const doctorName = document.getElementById("doctorSelect").value;
+      const resultBox = document.getElementById("bookingResult");
+      resultBox.textContent = "Booking...";
+
+      try {
+        const res = await fetch(`${API_BASE}/appointments/for-patient`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ patientId: currentPatientId, doctorName }),
+        });
+        const json = await res.json();
+        resultBox.textContent = json.message + (json.bed ? ` (Bed ${json.bed.bedNumber})` : "");
+      } catch (err) {
+        resultBox.textContent = "Error: could not reach the server.";
+      }
+    });
+
+    loadWaitingList();
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>

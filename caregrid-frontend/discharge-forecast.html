@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Expected Discharge - CareGrid</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="auth-guard.js"></script>
+</head>
+<body>
+  <nav id="mainNav"></nav>
+
+  <h2>Set Expected Discharge Date</h2>
+  <p style="color:#666; font-size:13px;">After reviewing a patient's condition, set an expected discharge date so Hospital Admin can plan bed turnover.</p>
+
+  <div class="card">
+    <form id="dischargeDateForm">
+      <input name="patientId" placeholder="Patient ID" required>
+      <input name="doctorName" placeholder="Your Name" required>
+      <input name="expectedDischargeDate" type="date" required>
+      <button type="submit">Set Expected Discharge Date</button>
+    </form>
+    <p id="setResult"></p>
+  </div>
+
+  <script src="api.js"></script>
+  <script>
+    document.getElementById("dischargeDateForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target));
+      const patientId = data.patientId;
+      delete data.patientId;
+
+      const res = await fetch(`${API_BASE}/forecast/${patientId}/expected-discharge`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+
+      const resultBox = document.getElementById("setResult");
+      resultBox.textContent = json.message
+        ? `Set for ${json.patient.name}: ${new Date(json.patient.expectedDischargeDate).toLocaleDateString()}`
+        : json.error;
+
+      if (json.message) e.target.reset();
+    });
+  </script>
+
+  <script src="nav.js"></script>
+</body>
+</html>
